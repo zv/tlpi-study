@@ -1,0 +1,34 @@
+* Chapter 29 - Thread: Introduction
+  :PROPERTIES:
+  :header-args: :libs -lpthread :includes <pthread.h> "/home/zv/Development/practice/linux_programming_interface/lib/tlpi_hdr.h" 
+  :END:
+** Highlights
+   
+   #+BEGIN_SRC C :results verbatim
+void * threadFunc(void *arg)
+{
+    char *s = (char *) arg;
+    printf("%s", s);
+    return (void *) strlen(s);
+}
+
+pthread_t t1;
+void *res;
+int s;
+
+s = pthread_create(&t1, NULL, threadFunc, "Hello world \n");
+if (s != 0) errExitEN(s, "pthread_create");
+
+printf("Message from main()\n");
+s = pthread_join(t1, &res);
+if (s != 0) errExitEN(s, "pthread_join ");
+
+printf("Thread returned %ld\n", (long) res);
+
+exit(EXIT_SUCCESS);
+   #+END_SRC 
+
+   #+RESULTS:
+   : Message from main()
+   : Hello worln 
+   : Thread returned 13
