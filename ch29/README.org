@@ -85,7 +85,7 @@
     attached. Furthermore the locations of the per-thread stacks can vary
     depending on the Linux distribution.
 
-    #+BEGIN_SRC ditaa :cmdline -E :file memory_organization.png
+    #+BEGIN_SRC ditaa :cmdline -E :file memory_organization.png :exports results
 +------------+ 0xC0000000
 | argv, env  | ^ Increasing Virtual Addresses
 +------------+ |
