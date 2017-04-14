@@ -2,15 +2,81 @@
   :PROPERTIES:
   :header-args: :libs -lpthread :includes <pthread.h> "/home/zv/Development/practice/linux_programming_interface/lib/tlpi_hdr.h"
   :END:
-** Overview
-   This chapter emphasizes that fundamental trait of threads -- total freedom of
-   their execution's ordering and the disasters that arise when a program relies
-   on some particular scheduling.
 
-   This chapter is primarily concerned with the high-level operation of threads
-   and the pthreads API (creation, joining, returning). Synchronization will be
-   examined in the next chapter.
+  This chapter is primarily concerned with the high-level operation of threads
+  and the pthreads API (creation, joining, returning). Synchronization is
+  examined in the next chapter.
 
+** Exercises
+*** 29.1
+    #+BEGIN_QUOTE
+    What possible outcomes might there be if a thread executes the following
+    code:
+
+    =pthread_join(pthread_self(), NULL);=
+
+    Write a program to see what actually happens on Linux. If we have a
+    variable, tid, containing a thread ID, how can a thread prevent itself from
+    making a call, pthread_join(tid, NULL), that is equivalent to the above
+    statement?
+    #+END_QUOTE
+
+    This chapter makes vague mention of the surprising effects that can occur
+    when a thread attempts to join a thread that has already done so. You can
+    prevent this by using ~pthread_equal~ to ensure that whichever thread id we
+    are operating with is not our own.
+
+**** Solution
+     #+BEGIN_SRC C :results verbatim :exports both
+     void *joinSelf(void *arg) {
+         printf("%p\n", arg);
+         int s = pthread_join(pthread_self(), NULL);
+         if (s != 0) errExitEN(s, "joinSelf failed: pthread_join");
+         return (void *) 1;
+     }
+
+
+     pthread_t t1;
+     int s;
+
+     printf("Starting Thread 1\n");
+     s = pthread_create(&t1, NULL, joinSelf, (int*) 0);
+     if (s != 0) errExitEN(s, "pthread_create");
+
+     sleep(10); // ensure the thread can run before program termination
+     #+END_SRC
+
+     #+RESULTS:
+     : ERROR [EDEADLK/EDEADLOCK Resource deadlock avoided] joinSelf failed: pthread_join
+
+*** 29.2
+    #+BEGIN_QUOTE
+    Aside from the absence of error checking and various variable and structure
+    declarations, what is the problem with the following program?
+    #+END_QUOTE
+
+    #+BEGIN_SRC c
+    static void * threadFunc(void *arg) {
+      struct someStruct *pbuf = (struct someStruct *) arg;
+      /* Do some work with structure pointed to by 'pbuf' */
+    }
+    
+    int main(int argc, char *argv[]) {
+      struct someStruct buf;
+      pthread_create(&thr, NULL, threadFunc, (void *) &buf);
+      pthread_exit(NULL);
+    }
+    #+END_SRC
+
+**** Solution
+     Because =pthread_exit= is invoked here (as opposed to =exit= or =return=,
+     which would indirectly kill thre threads), ~threadFunc~ continues to run
+     with a pointer to ~buf~. This could cause a segmentation fault, incorrect
+     results or be exploited by a clever hacker to dereference already freed
+     memory.
+ 
+
+** Notes
 *** Thread Organization:
     This is a simplified figure of the organization in virtual memory of a
     threaded process. The location of per-thread stacks may be intermingled with
@@ -146,10 +212,10 @@
      void pthread_exit(void * retval);
      #+END_SRC
      
-    =pthread_exit= is equivalent to calling ~return~ in the thread's ~start~
-    function. It's important to remember that you *cannot* return a value that
-    exists on the thread's stack! You must return either a constant or a value
-    whose lifetime extends beyond that of a the thread's local storage.
+     =pthread_exit= is equivalent to calling ~return~ in the thread's ~start~
+     function. It's important to remember that you *cannot* return a value that
+     exists on the thread's stack! You must return either a constant or a value
+     whose lifetime extends beyond that of a the thread's local storage.
 
 *** Thread 'Joining'
 **** =pthread-join=
@@ -194,44 +260,3 @@
     : Message from main()
     : Hello world 
     : Thread returned 13
-
-** Exercises
-
-*** 29.1
-    #+BEGIN_QUOTE
-    What possible outcomes might there be if a thread executes the following
-    code:
-
-    =pthread_join(pthread_self(), NULL);=
-
-    Write a program to see what actually happens on Linux. If we have a
-    variable, tid, containing a thread ID, how can a thread prevent itself from
-    making a call, pthread_join(tid, NULL), that is equivalent to the above
-    statement?
-    #+END_QUOTE
-
-**** Results
-     An error (=EDEADLK=) is thrown. 
-
-**** Code
-     #+BEGIN_SRC C :results verbatim :exports both
-     void *joinSelf(void *arg) {
-         printf("%p\n", arg);
-         int s = pthread_join(pthread_self(), NULL);
-         if (s != 0) errExitEN(s, "joinSelf failed: pthread_join");
-         return (void *) 1;
-     }
-
-
-     pthread_t t1;
-     int s;
-
-     printf("Starting Thread 1\n");
-     s = pthread_create(&t1, NULL, joinSelf, (int*) 0);
-     if (s != 0) errExitEN(s, "pthread_create");
-
-     sleep(10); // ensure the thread can run before program termination
-     #+END_SRC
-
-     #+RESULTS:
-     : ERROR [EDEADLK/EDEADLOCK Resource deadlock avoided] joinSelf failed: pthread_join
