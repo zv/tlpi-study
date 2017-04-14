@@ -51,6 +51,11 @@
 |  ( Text )  | <- Thread #2
 +------------+ 0x0000
     #+END_SRC
+    #+CAPTION: Memory Organization
+    #+NAME: fig:memory_organization.png
+    [[./memory_organization.png]]
+
+
 *** Thread Attributes
     Besides global membory, threads also share a number of other attributes
     (i.e, these attibutes are global to a process, rather than specific to a
@@ -64,22 +69,22 @@
     * signal dispositions;
     * file system–related information: umask, current working directory, and root directory;
     * interval timers (setitimer()) and POSIX timers (timer_create());
-    * System V semaphore undo (semadj) values (Section 47.8);
+    * System V semaphore undo (semadj) values;
     * resource limits;
     * CPU time consumed (as returned by times());
     * resources consumed (as returned by getrusage()); and
     * nice value (set by setpriority() and nice()).
 
     As well as a number of per-thread details:
-    * thread ID (Section 29.5);
+    * thread ID;
     * signal mask;
-    * thread-specific data (Section 31.3);
+    * thread-specific data;
     * alternate signal stack (sigaltstack());
     * the errno variable;
-    * floating-point environment (see fenv(3));
-    * realtime scheduling policy and priority (Sections 35.2 and 35.3);
-    * CPU affinity (Linux-specific, described in Section 35.4);
-    * capabilities (Linux-specific, described in Chapter 39); and
+    * floating-point environment;
+    * realtime scheduling policy and priority;
+    * CPU affinity (Linux-specific);
+    * capabilities (Linux-specific); and
     * stack (local variables and function call linkage information).
 
 *** Pthreads Data Types
@@ -88,14 +93,14 @@
     applications.
     | Data type           | Description                             |
     |---------------------+-----------------------------------------|
-    | pthread_t           | Thread identifier                       |
-    | pthread_mutex_t     | Mutex                                   |
-    | pthread_mutexattr_t | Mutex attributes object                 |
-    | pthread_cond_t      | Condition variable                      |
-    | pthread_condattr_t  | Condition variable attributes object    |
-    | pthread_key_t       | Key for thread-specific data            |
-    | pthread_once_t      | One-time initialization control context |
-    | pthread_attr_t      | Thread attributes object                |
+    | =pthread_t=           | Thread identifier                       |
+    | =pthread_mutex_t=     | Mutex                                   |
+    | =pthread_mutexattr_t= | Mutex attributes object                 |
+    | =pthread_cond_t=      | Condition variable                      |
+    | =pthread_condattr_t=  | Condition variable attributes object    |
+    | =pthread_key_t=       | Key for thread-specific data            |
+    | =pthread_once_t=      | One-time initialization control context |
+    | =pthread_attr_t=      | Thread attributes object                |
 
 
 *** =errno=
@@ -163,7 +168,7 @@
 
 ** Examples
 *** Simple Thread Creation
-    #+BEGIN_SRC C :results verbatim
+    #+BEGIN_SRC C :results pp :exports both
     void * threadFunc(void *arg)
     {
         char *s = (char *) arg;
@@ -209,7 +214,7 @@
      An error (=EDEADLK=) is thrown. 
 
 **** Code
-     #+BEGIN_SRC C :results verbatim
+     #+BEGIN_SRC C :results verbatim :exports both
      void *joinSelf(void *arg) {
          printf("%p\n", arg);
          int s = pthread_join(pthread_self(), NULL);
@@ -229,4 +234,4 @@
      #+END_SRC
 
      #+RESULTS:
-    
+     : ERROR [EDEADLK/EDEADLOCK Resource deadlock avoided] joinSelf failed: pthread_join
