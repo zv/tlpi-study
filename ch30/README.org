@@ -1,0 +1,114 @@
+* Chapter 30 - Thread: Thread Synchronization
+  :PROPERTIES:
+  :header-args: :libs -lpthread :includes <pthread.h> "/home/zv/Development/practice/linux_programming_interface/lib/tlpi_hdr.h"
+  :END:
+** Exercises
+
+** Notes
+*** Mutex Allocation
+    There are different methods of allocating a mutex statically or dynamically
+    at run time (for example, in a block of memory allocated via ~malloc()~). A
+    mutex is a variable of the type ~pthread_mutex_t~. For a statically
+    allocated mutex, we can do this by assigning it the value
+    ~PTHREAD_MUTEX_INITIALIZER~ , as in the following example: ~pthread_mutex_t
+    mtx = PTHREAD_MUTEX_INITIALIZER~
+*** Acquire & Release
+    #+BEGIN_SRC c
+    #include <pthread.h>
+    int pthread_mutex_lock(pthread_mutex_t * mutex);
+    int pthread_mutex_unlock(pthread_mutex_t * mutex);
+    // Both return 0 on success, or a positive error number on error 
+    #+END_SRC
+    To lock a mutex, we specify the mutex in a call to ~pthread_mutex_lock()~.
+    If the mutex is currently unlocked, this call locks the mutex and returns
+    immediately. If the mutex is currently locked by another thread, then
+    ~pthread_mutex_lock()~ blocks until the mutex is unlocked, at which point it
+    locks the mutex and returns. If there is acquisition contention, who will
+    succeed in acquiring it isn't determined.
+
+    If a calling thread tries to acquire a default locked mutex (multiple
+    varieties exist), that will fail and return =EDEADLK=.
+*** Mutex Performance
+    Mutexes are about 10 times faster than SysV semaphores or file locks because
+    (on x86) they can be implemented in user-space using architecture builtins.
+**** Mutex Implementation
+     On Linux, mutexes are implemented using futexes (fast userspace mutexes),
+     and lock contentions are dealt with using the ~futex()~ system call.
+*** Avoiding Deadlock
+    Two well-known methods for avoiding deadlock exist with Pthreads.
+
+    1. Defining a lock ordering schedule or hierarchy. If a set of locks proceed in the same order in each thread, there is no way for one thread to hold a particular lock and another to hold the corresponding lock.
+    2. "Try and back off" is a strategy for locking a mutex and then trying again after some delay interval. This is slower but is more flexible.
+*** Mutex Types
+    The behavior of a mutex can change depending on the type assigned to it:
+
+***** ~PTHREAD_MUTEX_NORMAL~
+      (Self-)deadlock detection is not provided for this type of mutex. If a
+      thread tries to lock a mutex that it has already locked, then deadlock
+      results. Unlocking a mutex that is not locked or that is locked by another
+      thread produces undefined results. (On Linux, both of these operations
+      succeed for this mutex type.)
+***** ~PTHREAD_MUTEX_ERRORCHECK~
+      Error checking is performed on all operations. All three of the above
+      scenarios cause the relevant Pthreads function to return an error. This
+      type of mutex is typically slower than a normal mutex, but can be useful
+      as a debugging tool to discover where an application is violating the
+      rules about how a mutex should be used.
+***** ~PTHREAD_MUTEX_RECURSIVE~
+      A recursive mutex maintains the concept of a lock count. When a thread
+      first acquires the mutex, the lock count is set to 1. Each subsequent lock
+      operation by the same thread increments the lock count, and each unlock
+      operation decrements the count. The mutex is released (i.e., made avail-
+      able for other threads to acquire) only when the lock count falls to 0.
+      Unlocking an unlocked mutex fails, as does unlocking a mutex that is cur-
+      rently locked by another thread.
+
+*** Condition Variables
+    Condition variables can notify another thread about shared variable/resource
+    changes. This can be used as a primitive to create thread pools.
+    
+    Condition variables don't hold any information, they are simply a mechanism
+    for communicating information about the application's state.
+
+    
+
+** Examples
+*** Incorrectly incrementng a global variable from two threads
+    #+BEGIN_SRC C :results pp :exports both
+    static volatile int glob = 0;   /* "volatile" prevents compiler optimizations
+                                       of arithmetic operations on 'glob' */
+    void *                          /* Loop 'arg' times incrementing 'glob' */
+    threadFunc(void *arg)
+    {
+        int loops = *((int *) arg);
+        int loc, j;
+    
+        for (j = 0; j < loops; j++) {
+            loc = glob;
+            loc++;
+            glob = loc;
+        }
+    
+        return NULL;
+    }
+
+    pthread_t t1, t2;
+    int loops, s;
+
+    loops = 10000;
+
+    s = pthread_create(&t1, NULL, threadFunc, &loops);
+    if (s != 0) errExitEN(s, "pthread_create");
+    s = pthread_create(&t2, NULL, threadFunc, &loops);
+    if (s != 0) errExitEN(s, "pthread_create");
+
+    s = pthread_join(t1, NULL);
+    if (s != 0) errExitEN(s, "pthread_join");
+    s = pthread_join(t2, NULL);
+    if (s != 0) errExitEN(s, "pthread_join");
+
+    printf("glob = %d\n", glob);
+    #+END_SRC
+
+    #+RESULTS:
+    : glob = 12834 // The correct value should be 20,000
