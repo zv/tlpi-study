@@ -24,7 +24,7 @@ IMPL_CFLAGS = -std=c99 -D_XOPEN_SOURCE=600 \
 		-pedantic \
 		-Wall \
 		-W \
-		-Wmissing-prototypes \
+		# -Wmissing-prototypes \
 		-Wno-sign-compare \
 		-Wno-unused-parameter
 

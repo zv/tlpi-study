@@ -28,23 +28,41 @@
 #include <search.h>
 #include "../lib/tlpi_hdr.h"
 
+// static pthread_mutex_t global_lock = PTHREAD_MUTEX_INITIALIZER;
 // typedef __uint128_t Key;
 typedef unsigned int Key;
 
-struct bt_node {
+typedef struct bt_node {
     Key key;
-    void *value;
+    int value;
     struct bt_node *left;
     struct bt_node *right;
     pthread_mutex_t mutex;
-};
-typedef struct bt_node bt_node;
+} bt_node;
 
-struct bt_root {
+typedef struct bt_root {
     bt_node *root;
     size_t node_count;
-};
-typedef struct bt_root bt_root;
+} bt_root;
+
+// pthread_create arguments
+typedef struct mt_node_arguments {
+    Key key;
+    int value;
+    bt_root *root;
+} mt_args;
+
+int lock(bt_node *node) {
+    int s = pthread_mutex_lock(&node->mutex);
+    if (s != 0) { errExitEN(s, "pthread_mutex_lock" ); }
+    return s;
+}
+
+int unlock(bt_node *node) {
+    int s = pthread_mutex_unlock(&node->mutex);
+    if (s != 0) { errExitEN(s, "pthread_mutex_unlock" ); }
+    return s;
+}
 
 bt_root *initialize() {
     bt_root *tree = calloc(1, sizeof(bt_root));
@@ -53,50 +71,51 @@ bt_root *initialize() {
     return tree;
 }
 
-bt_node *create_node(Key key, void *value) {
+bt_node *create_node(Key key, int value) {
     bt_node *result = calloc(1, sizeof(bt_node));
     result->left  = NULL;
     result->right = NULL;
     result->key   = key;
     result->value = value;
-
+    pthread_mutex_init(&result->mutex, NULL);
     return result;
 }
 
-bt_node *find(bt_node *root, Key key) {
+bt_node *closest_leaf(bt_node *root, Key key) {
     bt_node *current = root;
     bt_node *prev = NULL;
     while (current != NULL) {
         prev = current;
-        if (key < current->key)
-            current = current->left;
-        else if (key > current->key)
-            current = current->right;
-        else
-            return current;
+        if      (key < current->key)  current = current->left;
+        else if (key > current->key)  current = current->right;
+        else                          return current;
     }
 
     return prev;
 }
 
-int add(bt_root *root_tree, Key key, void *value) {
-    bt_node *current = root_tree->root;
+int add(bt_root *root_tree, Key key, int value) {
     bt_node *new_node = create_node(key, value);
-    bt_node *leaf = find(current, key);
+    bt_node *current = root_tree->root;
 
-    if (leaf == NULL) {
+    // we could have both threads think 'root' is NULL and replace both in sequence
+    if (current == NULL) {
         root_tree->root = new_node;
-    } else {
-        if (key < leaf->key)
-            leaf->left = new_node;
-        else if (key > leaf->key)
-            leaf->right = new_node;
-        else
-            return -1;
+        root_tree->node_count = 1;
+        return 1;
     }
 
-    root_tree->node_count++;
-    return 0;
+    lock(current);
+
+      bt_node *leaf = closest_leaf(current, key);
+      if      (key == leaf->key)  return 0;
+      if      (key < leaf->key)   leaf->left = new_node;
+      else if (key > leaf->key)   leaf->right = new_node;
+      ++root_tree->node_count;
+
+    unlock(current);
+
+    return 1;
 }
 
 void replace_parent(bt_node *parent, bt_node *child, bt_node *new_child) {
@@ -170,9 +189,7 @@ int delete_dfs(bt_node *node, bt_node *parent, Key key) {
 }
 
 void delete(bt_root *root_tree, Key key) {
-    if (delete_dfs(root_tree->root, NULL, key)) {
-        root_tree->node_count--;
-    }
+    if (delete_dfs(root_tree->root, NULL, key)) root_tree->node_count--;
 }
 
 void breadth_first(bt_root *root_tree, void (*action)(const bt_node*)) {
@@ -191,13 +208,14 @@ void breadth_first(bt_root *root_tree, void (*action)(const bt_node*)) {
         current = stack[++ith];
     }
 
-    for(int i = 0; i < count; i++)
-        action(stack[i]);
+    int i = 0;
+    while (stack[i] != NULL)
+        action(stack[i++]);
 }
 
 void depth_first_driver(bt_node *current, size_t depth, void (*action)(const bt_node*, int)) {
-    action(current, depth);
     if (!current) return;
+    action(current, depth);
     if (!current->right && !current->left) return;
     depth_first_driver(current->right, depth + 1, action);
     depth_first_driver(current->left, depth + 1, action);
@@ -208,6 +226,8 @@ void depth_first(bt_root *root, void (*action)(const bt_node*, int)) {
 }
 
 void print_node_depth(const bt_node *node, int depth) {
+    printf("%c ", node->key);
+    return;
     if (node != NULL) {
         printf("%*c \n", 3*depth, node->key);
     } else {
@@ -221,38 +241,33 @@ void print_node(const bt_node *node) {
     }
 }
 
-int main() {
-    bt_root *root = initialize();
-    add(root, 'M', (void*)1);
-    add(root, 'G', (void*)1);
-    add(root, 'Q', (void*)1);
-    add(root, 'Z', (void*)1);
-    add(root, 'J', (void*)1);
-    add(root, 'C', (void*)1);
-    add(root, 'L', (void*)1);
-    add(root, 'U', (void*)1);
-    add(root, 'P', (void*)1);
-    add(root, 'V', (void*)1);
-    /*
-    add(root, 'T', (void*)1);
-    add(root, 'O', (void*)1);
-    add(root, 'E', (void*)1);
-    add(root, 'X', (void*)1);
-    add(root, 'N', (void*)1);
-    add(root, 'S', (void*)1);
-    add(root, 'R', (void*)1);
-    add(root, 'W', (void*)1);
-    add(root, 'B', (void*)1);
-    add(root, 'F', (void*)1);
-    add(root, 'H', (void*)1);
-    add(root, 'I', (void*)1);
-    add(root, 'D', (void*)1);
-    add(root, 'K', (void*)1);
-    add(root, 'Y', (void*)1);
-    add(root, 'A', (void*)1);
-    */
+void *mt_add(void *arg) {
+    mt_args *parameters = (mt_args*)arg;
+    add(parameters->root, parameters->key, parameters->value);
+    return NULL;
+}
 
+int main() {
+    pthread_t threads[26];
+    bt_root *root = initialize();
+    add(root, 'M', 1);
+
+    char letters[25] = {'G', 'A', 'Q', 'Z', 'J', 'C', 'L', 'U', 'P', 'V', 'T', 'O', 'E',
+                        'X', 'N', 'S', 'R', 'W', 'B', 'F', 'H', 'I', 'D', 'K', 'Y'};
+
+    for(int i = 0; i < 25; i++) {
+        mt_args *args = alloca(1);
+        args->key = letters[i]; args->value = i; args->root = root;
+        int s = pthread_create(&threads[i], NULL, mt_add, args);
+        if (s != 0) errExitEN(s, "pthread_create");
+    }
+
+    for(int i = 0; i < 25; i++) {
+        int s = pthread_join(threads[i], NULL);
+        if (s != 0) errExitEN(s, "pthread_join");
+    }
 
     depth_first(root, &print_node_depth);
-
+    printf("\nnumber: %zd\n", root->node_count);
+    return 0;
 }

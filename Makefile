@@ -1,6 +1,6 @@
 # Makefile to build all practice exercises
 
-DIRS = lib fileio
+DIRS = lib ch3 ch29 fileio
 
 BUILD_DIRS = ${DIRS} ${CDIRS}
 
