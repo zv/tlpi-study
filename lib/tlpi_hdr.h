@@ -27,10 +27,7 @@
 
 #include <stdarg.h>     /* Argument handling */
 
-#include "get_num.h"    /* Declares our functions for handling numeric
-                           arguments (getInt(), getLong()) */
-
-#include "error_functions.h"  /* Declares our error-handling functions */
+#include <limits.h>     /* Integer Limits */
 
 /* Unfortunately some UNIX implementations define FALSE and TRUE -
    here we'll undefine them */
@@ -82,8 +79,10 @@ typedef int socklen_t;
 #define sival_ptr sigval_ptr
 #endif
 
-#endif
 
+/*
+  ENAME INCLUDE
+ */
 
 
 static char *ename[] = {
@@ -122,6 +121,137 @@ static char *ename[] = {
 
 #define MAX_ENAME 133
 
+
+// get_num
+#define GN_NONNEG       01      /* Value must be >= 0 */
+#define GN_GT_0         02      /* Value must be > 0 */
+
+                                /* By default, integers are decimal */
+#define GN_ANY_BASE   0100      /* Can use any base - like strtol(3) */
+#define GN_BASE_8     0200      /* Value is expressed in octal */
+#define GN_BASE_16    0400      /* Value is expressed in hexadecimal */
+
+long getLong(const char *arg, int flags, const char *name);
+
+int getInt(const char *arg, int flags, const char *name);
+
+/* Declares our functions for handling numeric arguments (getInt(), getLong()) */
+
+
+/* Print a diagnostic message that contains a function name ('fname'),
+   the value of a command-line argument ('arg'), the name of that
+   command-line argument ('name'), and a diagnostic error message ('msg'). */
+
+static void
+gnFail(const char *fname, const char *msg, const char *arg, const char *name)
+{
+    fprintf(stderr, "%s error", fname);
+    if (name != NULL)
+        fprintf(stderr, " (in %s)", name);
+    fprintf(stderr, ": %s\n", msg);
+    if (arg != NULL && *arg != '\0')
+        fprintf(stderr, "        offending text: %s\n", arg);
+
+    exit(EXIT_FAILURE);
+}
+
+/* Convert a numeric command-line argument ('arg') into a long integer,
+   returned as the function result. 'flags' is a bit mask of flags controlling
+   how the conversion is done and what diagnostic checks are performed on the
+   numeric result; see get_num.h for details.
+
+   'fname' is the name of our caller, and 'name' is the name associated with
+   the command-line argument 'arg'. 'fname' and 'name' are used to print a
+   diagnostic message in case an error is detected when processing 'arg'. */
+
+static long
+getNum(const char *fname, const char *arg, int flags, const char *name)
+{
+    long res;
+    char *endptr;
+    int base;
+
+    if (arg == NULL || *arg == '\0')
+        gnFail(fname, "null or empty string", arg, name);
+
+    base = (flags & GN_ANY_BASE) ? 0 : (flags & GN_BASE_8) ? 8 :
+                        (flags & GN_BASE_16) ? 16 : 10;
+
+    errno = 0;
+    res = strtol(arg, &endptr, base);
+    if (errno != 0)
+        gnFail(fname, "strtol() failed", arg, name);
+
+    if (*endptr != '\0')
+        gnFail(fname, "nonnumeric characters", arg, name);
+
+    if ((flags & GN_NONNEG) && res < 0)
+        gnFail(fname, "negative value not allowed", arg, name);
+
+    if ((flags & GN_GT_0) && res <= 0)
+        gnFail(fname, "value must be > 0", arg, name);
+
+    return res;
+}
+
+/* Convert a numeric command-line argument string to a long integer. See the
+   comments for getNum() for a description of the arguments to this function. */
+
+long
+getLong(const char *arg, int flags, const char *name)
+{
+    return getNum("getLong", arg, flags, name);
+}
+
+/* Convert a numeric command-line argument string to an integer. See the
+   comments for getNum() for a description of the arguments to this function. */
+
+int
+getInt(const char *arg, int flags, const char *name)
+{
+    long res;
+
+    res = getNum("getInt", arg, flags, name);
+
+    if (res > INT_MAX || res < INT_MIN)
+        gnFail("getInt", "integer out of range", arg, name);
+
+    return (int) res;
+}
+
+
+/*
+  ERROR FUNCTIONS
+ */
+
+
+
+/* Error diagnostic routines */
+
+void errMsg(const char *format, ...);
+
+#ifdef __GNUC__
+
+/* This macro stops 'gcc -Wall' complaining that "control reaches
+   end of non-void function" if we use the following functions to
+   terminate main() or some other non-void function. */
+
+#define NORETURN __attribute__ ((__noreturn__))
+#else
+#define NORETURN
+#endif
+
+void errExit(const char *format, ...) NORETURN ;
+
+void err_exit(const char *format, ...) NORETURN ;
+
+void errExitEN(int errnum, const char *format, ...) NORETURN ;
+
+void fatal(const char *format, ...) NORETURN ;
+
+void usageErr(const char *format, ...) NORETURN ;
+
+void cmdLineErr(const char *format, ...) NORETURN ;
 
 
 
@@ -305,3 +435,5 @@ cmdLineErr(const char *format, ...)
     fflush(stderr);           /* In case stderr is not line-buffered */
     exit(EXIT_FAILURE);
 }
+
+#endif
