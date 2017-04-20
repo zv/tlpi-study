@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include <pthread.h>
 #include <search.h>
+#include <ctype.h>
 #include "../lib/tlpi_hdr.h"
 
 // static pthread_mutex_t global_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -88,7 +89,10 @@ bt_node *closest_leaf(bt_node *root, Key key) {
         prev = current;
         if      (key < current->key)  current = current->left;
         else if (key > current->key)  current = current->right;
-        else                          return current;
+        else  {
+            prev = current;
+            break;
+        }
     }
 
     return prev;
@@ -106,14 +110,19 @@ int add(bt_root *root_tree, Key key, int value) {
     }
 
     lock(current);
-
-      bt_node *leaf = closest_leaf(current, key);
-      if      (key == leaf->key)  return 0;
-      if      (key < leaf->key)   leaf->left = new_node;
-      else if (key > leaf->key)   leaf->right = new_node;
-      ++root_tree->node_count;
-
+    bt_node *leaf = closest_leaf(current, key);
+    if (key < leaf->key) {
+        leaf->left = new_node;
+        ++root_tree->node_count;
+    }
+    else if (key > leaf->key) {
+        leaf->right = new_node;
+        ++root_tree->node_count;
+    } else {
+        free(new_node);
+    }
     unlock(current);
+
 
     return 1;
 }
@@ -141,7 +150,8 @@ void splice(bt_node *node, bt_node *parent) {
     } else if (node->right && !node->left) {
             replace_parent(parent, node, node->right);
 
-    // if it has two children, take the smallest value of the right tree and replace the node with that one.
+    /* if it has two children, take the smallest value of the right tree and
+       replace the node with that one. */
     } else if (node->right && node->left) {
         // find the smallest element of the right tree
         bt_node *smallest_parent = node;
@@ -164,21 +174,18 @@ void splice(bt_node *node, bt_node *parent) {
 }
 
 int delete_dfs(bt_node *node, bt_node *parent, Key key) {
-    if (node == NULL) {
+    if (node == NULL)
         return 0;
-    }
 
     Key node_key = node->key;
+
+    // we've found the key, let's actually splice it out of the tree
     if (node_key == key) {
-        if (parent) {
-            splice(node, parent);
-            return 1;
-        } else {
-            // delete the whole tree some other time
-            return 0;
-        }
+        splice(node, parent);
+        return 1;
     }
 
+    // otherwise we should search (depth first).
     if (key < node_key) {
         return delete_dfs(node->left, node, key);
     } else if (key > node_key) {
@@ -226,7 +233,11 @@ void depth_first(bt_root *root, void (*action)(const bt_node*, int)) {
 }
 
 void print_node_depth(const bt_node *node, int depth) {
-    printf("%c ", node->key);
+    if (isalnum(node->key)) {
+        printf("%c ", node->key);
+    } else {
+        printf("%X ", node->key);
+    }
     return;
     if (node != NULL) {
         printf("%*c \n", 3*depth, node->key);
@@ -248,26 +259,36 @@ void *mt_add(void *arg) {
 }
 
 int main() {
-    pthread_t threads[26];
     bt_root *root = initialize();
     add(root, 'M', 1);
 
-    char letters[25] = {'G', 'A', 'Q', 'Z', 'J', 'C', 'L', 'U', 'P', 'V', 'T', 'O', 'E',
+    char __attribute__((__unused__)) letters[25] = {'G', 'A', 'Q', 'Z', 'J', 'C', 'L', 'U', 'P', 'V', 'T', 'O', 'E',
                         'X', 'N', 'S', 'R', 'W', 'B', 'F', 'H', 'I', 'D', 'K', 'Y'};
 
-    for(int i = 0; i < 25; i++) {
+    int num = 100;
+    pthread_t threads[num];
+
+    /* for(int i = 0; i < num; i++) { */
+    /*     mt_args *args = alloca(1); */
+    /*     args->key = letters[i]; args->value = i; args->root = root; */
+    /*     int s = pthread_create(&threads[i], NULL, mt_add, args); */
+    /*     if (s != 0) errExitEN(s, "pthread_create"); */
+    /* } */
+
+    for(int i = 1; i < num; i++) {
         mt_args *args = alloca(1);
-        args->key = letters[i]; args->value = i; args->root = root;
+        args->key = i; args->value = i; args->root = root;
         int s = pthread_create(&threads[i], NULL, mt_add, args);
         if (s != 0) errExitEN(s, "pthread_create");
     }
 
-    for(int i = 0; i < 25; i++) {
+    for(int i = 1; i < num; i++) {
         int s = pthread_join(threads[i], NULL);
         if (s != 0) errExitEN(s, "pthread_join");
     }
 
     depth_first(root, &print_node_depth);
     printf("\nnumber: %zd\n", root->node_count);
+    free(root);
     return 0;
 }
